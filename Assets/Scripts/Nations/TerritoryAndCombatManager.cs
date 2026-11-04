@@ -26,29 +26,86 @@ namespace MeWorld.Nations
         private int[] _sumX;
         private int[] _sumY;
         private int[] _counts;
+        private int _lastSeed;
         private readonly int[] _neighborBuffer = new int[4];
         private readonly List<int> _candidatePixels = new List<int>(512);
 
         public Func<ushort, int, int, float> DefenseMultiplierProvider;
+        public Action<NationData, NationData> OnNationPlundered;
 
         public void Initialize(WorldMapGrid grid, MapRenderer mapRenderer, int seed)
         {
             _grid = grid;
             _mapRenderer = mapRenderer;
+            _lastSeed = seed;
 
-            int maxId = GameConfig.PlayerNationCount + GameConfig.TribeCount + 5;
+            int maxId = GameConfig.PlayerNationCount + GameConfig.TribeCount + 10;
             _sumX = new int[maxId];
             _sumY = new int[maxId];
             _counts = new int[maxId];
 
-            SpawnNationsAndTribes(seed);
-            RecalculateStatsAndCenters();
-            TickEconomy(0.01f);
-            _grid.UpdateAllBorders();
-            _mapRenderer.MarkDirty();
+            _nations.Clear();
+            _nationList.Clear();
+            _activeWaves.Clear();
+
+            GamePlayMode mode = KeybindManager.Instance.CurrentGameMode;
+            if (mode == GamePlayMode.Spectator)
+            {
+                ProtectionTimer = 0f;
+                SpawnSpectatorWorld(seed);
+            }
         }
 
-        private void SpawnNationsAndTribes(int seed)
+        public Vector2Int FindBestStartingLand()
+        {
+            if (_grid == null) return new Vector2Int(280, 160);
+
+            if (_lastSeed == 20261103)
+            {
+                return FindLandNear(
+                    Mathf.RoundToInt(_grid.Width * 0.42f),
+                    Mathf.RoundToInt(_grid.Height * 0.47f),
+                    45
+                );
+            }
+
+            int bestX = _grid.Width / 2;
+            int bestY = _grid.Height / 2;
+            int bestScore = -1;
+
+            System.Random rng = new System.Random(_lastSeed + 77);
+            for (int t = 0; t < 300; t++)
+            {
+                int rx = rng.Next(Mathf.RoundToInt(_grid.Width * 0.15f), Mathf.RoundToInt(_grid.Width * 0.85f));
+                int ry = rng.Next(Mathf.RoundToInt(_grid.Height * 0.15f), Mathf.RoundToInt(_grid.Height * 0.85f));
+                int idx = _grid.GetIndex(rx, ry);
+                if (!_grid.IsLand(idx)) continue;
+
+                int landCount = 0;
+                for (int dy = -12; dy <= 12; dy += 3)
+                {
+                    for (int dx = -12; dx <= 12; dx += 3)
+                    {
+                        int nx = rx + dx;
+                        int ny = ry + dy;
+                        if (_grid.InBounds(nx, ny) && _grid.IsLand(_grid.GetIndex(nx, ny)))
+                            landCount++;
+                    }
+                }
+
+                if (landCount > bestScore)
+                {
+                    bestScore = landCount;
+                    bestX = rx;
+                    bestY = ry;
+                    if (bestScore > 50) break;
+                }
+            }
+
+            return new Vector2Int(bestX, bestY);
+        }
+
+        public void SpawnPlayerAndAI(int playerSpawnX, int playerSpawnY, string playerName, int seed)
         {
             _nations.Clear();
             _nationList.Clear();
@@ -57,52 +114,73 @@ namespace MeWorld.Nations
             System.Random rng = new System.Random(seed + 101);
             List<Vector2Int> spawnedCenters = new List<Vector2Int>(220);
 
-            // 1. Spawn Player Nation ("SnickTrix") in the central peninsula (like the screenshot!)
-            Vector2Int playerPos = FindLandNear(
-                Mathf.RoundToInt(_grid.Width * 0.42f),
-                Mathf.RoundToInt(_grid.Height * 0.47f),
-                45
-            );
-            PlayerNation = CreateAndClaimNation(1, "SnickTrix", true, false, playerPos.x, playerPos.y, 17, rng);
-            PlayerNation.Troops = 7470;
-            PlayerNation.MaxTroops = 20500;
-            PlayerNation.Gold = 775000;
+            GameDifficulty diff = KeybindManager.Instance.CurrentDifficulty;
+            switch (diff)
+            {
+                case GameDifficulty.Easy: ProtectionTimer = 240f; break;
+                case GameDifficulty.Hard: ProtectionTimer = 90f; break;
+                case GameDifficulty.Chaos: ProtectionTimer = 35f; break;
+                default: ProtectionTimer = GameConfig.InitialProtectionSeconds; break;
+            }
+
+            // 1. Spawn Player Nation at chosen location
+            Vector2Int playerPos = new Vector2Int(playerSpawnX, playerSpawnY);
+            if (!_grid.InBounds(playerPos.x, playerPos.y) || !_grid.IsLand(_grid.GetIndex(playerPos.x, playerPos.y)))
+            {
+                playerPos = FindLandNear(playerSpawnX, playerSpawnY, 35);
+            }
+
+            PlayerNation = CreateAndClaimNation(1, playerName, true, false, playerPos.x, playerPos.y, 5, rng);
+            switch (diff)
+            {
+                case GameDifficulty.Easy:
+                    PlayerNation.Troops = 1200;
+                    PlayerNation.MaxTroops = 3500;
+                    PlayerNation.Gold = 35000;
+                    break;
+                case GameDifficulty.Hard:
+                    PlayerNation.Troops = 500;
+                    PlayerNation.MaxTroops = 1800;
+                    PlayerNation.Gold = 5000;
+                    break;
+                case GameDifficulty.Chaos:
+                    PlayerNation.Troops = 350;
+                    PlayerNation.MaxTroops = 1200;
+                    PlayerNation.Gold = 0;
+                    break;
+                default:
+                    PlayerNation.Troops = 750;
+                    PlayerNation.MaxTroops = 2500;
+                    PlayerNation.Gold = 15000;
+                    break;
+            }
             spawnedCenters.Add(playerPos);
 
-            // 2. Spawn Featured Neighboring Nations from the screenshot ("India", "Oman", "Fernhold", "Tideborn", "Yak Tribe", "Mammoth Moot", etc.)
+            // 2. Spawn remaining 87 AI Nations and 110 Tribes across the map
             ushort nextId = 2;
-            SpawnPinnedNation(ref nextId, "India", false, 0.36f, 0.69f, 24, 6280, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Oman", false, 0.20f, 0.55f, 23, 6430, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Fernhold", false, 0.35f, 0.48f, 11, 2400, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Tideborn", false, 0.30f, 0.63f, 10, 2210, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Mammoth Moot", true, 0.40f, 0.31f, 10, 1510, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Flintcarvers", true, 0.41f, 0.59f, 9, 2500, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Schreckseers", true, 0.45f, 0.64f, 9, 2380, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Frostwardens", false, 0.50f, 0.62f, 11, 2210, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Bramblefire", true, 0.53f, 0.52f, 9, 2400, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Yak Tribe", true, 0.59f, 0.70f, 11, 1870, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Mooncrest", false, 0.26f, 0.72f, 10, 1610, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Pelican Folk", true, 0.55f, 0.66f, 8, 1950, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "The Pinebridlers", true, 0.60f, 0.53f, 10, 2100, spawnedCenters, rng);
-            SpawnPinnedNation(ref nextId, "Unrivaled Company", false, 0.21f, 0.68f, 10, 2050, spawnedCenters, rng);
-
             int totalEntities = GameConfig.PlayerNationCount + GameConfig.TribeCount;
-            int nameIdx = 14;
+            int nameIdx = 0;
             int tribeIdx = 0;
 
             int attempts = 0;
-            while (nextId <= totalEntities && attempts < 12000)
+            while (nextId <= totalEntities && attempts < 16000)
             {
                 attempts++;
-                int gx = rng.Next(8, _grid.Width - 8);
-                int gy = rng.Next(8, _grid.Height - 8);
+                int gx = rng.Next(6, _grid.Width - 6);
+                int gy = rng.Next(6, _grid.Height - 6);
                 int cellIdx = _grid.GetIndex(gx, gy);
 
                 if (!_grid.IsLand(cellIdx) || _grid.OwnerId[cellIdx] != 0)
                     continue;
 
+                float dxPlayer = gx - playerPos.x;
+                float dyPlayer = gy - playerPos.y;
+                if (dxPlayer * dxPlayer + dyPlayer * dyPlayer < 160f)
+                    continue;
+
+                bool isTribe = nextId > GameConfig.PlayerNationCount;
                 bool tooClose = false;
-                float minDistSq = nextId <= GameConfig.PlayerNationCount ? 210f : 115f;
+                float minDistSq = isTribe ? 85f : 160f;
                 for (int i = 0; i < spawnedCenters.Count; i++)
                 {
                     float dx = spawnedCenters[i].x - gx;
@@ -115,13 +193,12 @@ namespace MeWorld.Nations
                 }
                 if (tooClose) continue;
 
-                bool isTribe = nextId > GameConfig.PlayerNationCount;
                 string nName;
                 if (!isTribe)
                 {
                     nName = nameIdx < NationNamePool.FeaturedNationNames.Length
                         ? NationNamePool.FeaturedNationNames[nameIdx++]
-                        : $"Empire {nextId}";
+                        : $"Nation {nextId}";
                 }
                 else
                 {
@@ -130,15 +207,91 @@ namespace MeWorld.Nations
                         : $"Tribe {nextId - GameConfig.PlayerNationCount}";
                 }
 
-                int radius = isTribe ? rng.Next(5, 8) : rng.Next(7, 12);
+                // AI Nations start with radius 4-5 (~35-55 tiles), Tribes start with radius 3-4 (~18-35 tiles)
+                int radius = isTribe ? rng.Next(3, 5) : rng.Next(4, 6);
                 NationData nd = CreateAndClaimNation(nextId, nName, false, isTribe, gx, gy, radius, rng);
-                nd.Troops = isTribe ? rng.Next(1100, 2600) : rng.Next(2200, 4800);
-                nd.Gold = isTribe ? rng.Next(5000, 15000) : rng.Next(15000, 35000);
+                nd.Troops = isTribe ? rng.Next(180, 420) : rng.Next(450, 800);
+                nd.MaxTroops = isTribe ? 1400 : 2200;
+                nd.Gold = isTribe ? rng.Next(2000, 6500) : rng.Next(6000, 15000);
                 spawnedCenters.Add(new Vector2Int(gx, gy));
                 nextId++;
             }
 
-            ExpandTerritoriesVoronoi();
+            // ExpandTerritoriesVoronoi() removed: game starts with authentic neutral wilderness (~85%)
+            RecalculateStatsAndCenters();
+            TickEconomy(0.01f);
+            _grid.UpdateAllBorders();
+            _mapRenderer.MarkDirty();
+        }
+
+        private void SpawnSpectatorWorld(int seed)
+        {
+            _nations.Clear();
+            _nationList.Clear();
+            _activeWaves.Clear();
+            PlayerNation = null;
+
+            System.Random rng = new System.Random(seed + 101);
+            List<Vector2Int> spawnedCenters = new List<Vector2Int>(220);
+
+            ushort nextId = 1;
+            int totalEntities = GameConfig.PlayerNationCount + GameConfig.TribeCount;
+            int nameIdx = 0;
+            int tribeIdx = 0;
+
+            int attempts = 0;
+            while (nextId <= totalEntities && attempts < 16000)
+            {
+                attempts++;
+                int gx = rng.Next(6, _grid.Width - 6);
+                int gy = rng.Next(6, _grid.Height - 6);
+                int cellIdx = _grid.GetIndex(gx, gy);
+
+                if (!_grid.IsLand(cellIdx) || _grid.OwnerId[cellIdx] != 0)
+                    continue;
+
+                bool isTribe = nextId > GameConfig.PlayerNationCount;
+                bool tooClose = false;
+                float minDistSq = isTribe ? 85f : 160f;
+                for (int i = 0; i < spawnedCenters.Count; i++)
+                {
+                    float dx = spawnedCenters[i].x - gx;
+                    float dy = spawnedCenters[i].y - gy;
+                    if (dx * dx + dy * dy < minDistSq)
+                    {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                if (tooClose) continue;
+
+                string nName;
+                if (!isTribe)
+                {
+                    nName = nameIdx < NationNamePool.FeaturedNationNames.Length
+                        ? NationNamePool.FeaturedNationNames[nameIdx++]
+                        : $"Nation {nextId}";
+                }
+                else
+                {
+                    nName = tribeIdx < NationNamePool.TribeNames.Length
+                        ? NationNamePool.TribeNames[tribeIdx++]
+                        : $"Tribe {nextId - GameConfig.PlayerNationCount}";
+                }
+
+                int radius = isTribe ? rng.Next(3, 5) : rng.Next(4, 6);
+                NationData nd = CreateAndClaimNation(nextId, nName, false, isTribe, gx, gy, radius, rng);
+                nd.Troops = isTribe ? rng.Next(180, 420) : rng.Next(450, 800);
+                nd.MaxTroops = isTribe ? 1400 : 2200;
+                nd.Gold = isTribe ? rng.Next(2000, 6500) : rng.Next(6000, 15000);
+                spawnedCenters.Add(new Vector2Int(gx, gy));
+                nextId++;
+            }
+
+            RecalculateStatsAndCenters();
+            TickEconomy(0.01f);
+            _grid.UpdateAllBorders();
+            _mapRenderer.MarkDirty();
         }
 
         private void ExpandTerritoriesVoronoi()
@@ -252,6 +405,12 @@ namespace MeWorld.Nations
                 MaxTroops = 15000
             };
 
+            int capIdx = _grid.GetIndex(cx, cy);
+            if (_grid.InBounds(cx, cy) && _grid.IsLand(capIdx))
+            {
+                _grid.OwnerId[capIdx] = id;
+            }
+
             int rSq = radius * radius;
             for (int dy = -radius - 2; dy <= radius + 2; dy++)
             {
@@ -284,6 +443,14 @@ namespace MeWorld.Nations
                 ProtectionTimer = Mathf.Max(0f, ProtectionTimer - dt);
             }
 
+            for (int i = 0; i < _nationList.Count; i++)
+            {
+                if (_nationList[i].TraitorTimer > 0f)
+                {
+                    _nationList[i].TraitorTimer = Mathf.Max(0f, _nationList[i].TraitorTimer - dt);
+                }
+            }
+
             TickCombat();
             TickEconomy(dt);
         }
@@ -295,23 +462,34 @@ namespace MeWorld.Nations
                 NationData n = _nationList[i];
                 if (!n.IsAlive) continue;
 
-                // Calibrated to match RoWorld reference:
-                // Starting with ~900 tiles: MaxTroops ~23K, Growth: +140/s, Gold: 775K, Gold Growth: +1.26K/s
-                n.MaxTroops = 5000.0 + (n.TileCount * (n.IsTribe ? 10.0 : 18.0)) + (n.CityCount * 7500.0);
-                double fillRatio = n.MaxTroops > 0 ? (n.Troops / n.MaxTroops) : 1.0;
+                // OpenFront/RoWorld population scaling:
+                // Base capacity ~1500, +12 per tile, +25,000 per constructed City
+                n.MaxTroops = 1500.0 + (n.TileCount * (n.IsTribe ? 6.0 : 12.0)) + (n.CityCount * 25000.0);
+                double fillRatio = n.MaxTroops > 0 ? (n.Troops / n.MaxTroops) : 0.0;
 
-                // Logistic troop growth curve (fastest around 35-50% capacity, tapers near cap)
-                double logisticFactor = Math.Max(0.0, 1.0 - (fillRatio * fillRatio));
-                double baseGrowth = (n.IsTribe ? 16.0 : 42.0) + (n.TileCount * (n.IsTribe ? 0.04 : 0.118)) + (n.CityCount * 45.0);
-                n.TroopGrowthPerSec = baseGrowth * logisticFactor;
+                // The ~42% Rule from OpenFront / RoWorld:
+                // Troop regeneration is non-linear and peaks at ~42% capacity.
+                // Draining troops to zero causes growth to crawl; near 100% capacity it tapers off.
+                double diffFromPeak = fillRatio - 0.42;
+                double growthFactor = Math.Max(0.08, 1.0 - (diffFromPeak * diffFromPeak * 4.5));
+                double baseGrowth = (n.IsTribe ? 8.0 : 22.0) + (n.TileCount * (n.IsTribe ? 0.03 : 0.095)) + (n.CityCount * 70.0);
+                n.TroopGrowthPerSec = baseGrowth * growthFactor;
 
                 n.Troops = Math.Min(n.MaxTroops, n.Troops + n.TroopGrowthPerSec * dt);
 
-                n.GoldGrowthPerSec = (n.IsTribe ? 25.0 : 240.0)
-                    + (n.TileCount * (n.IsTribe ? 0.45 : 1.15))
-                    + (n.CityCount * 160.0)
-                    + (n.PortCount * 320.0)
-                    + (n.FactoryCount * 650.0);
+                // Early game starts with modest gold income (~120-150/s), scaling with territory and high-tier buildings
+                n.GoldGrowthPerSec = (n.IsTribe ? 18.0 : 75.0)
+                    + (n.TileCount * (n.IsTribe ? 0.30 : 0.85))
+                    + (n.CityCount * 280.0)
+                    + (n.PortCount * 500.0)
+                    + (n.FactoryCount * 850.0);
+
+                // Trade sanctions / Embargoes reduce mutual gold growth
+                if (n.Embargoes.Count > 0)
+                {
+                    double embargoMult = Math.Max(0.55, 1.0 - n.Embargoes.Count * 0.12);
+                    n.GoldGrowthPerSec *= embargoMult;
+                }
 
                 n.Gold += n.GoldGrowthPerSec * dt;
             }
@@ -539,7 +717,10 @@ namespace MeWorld.Nations
 
                     _grid.GetXY(targetCell, out int cx, out int cy);
 
-                    double pixelCost = 6.5; // neutral land cost
+                    double pixelCost = 6.0; // neutral land base cost
+                    if (_grid.Terrain[targetCell] == TerrainType.Mountains) pixelCost = 9.5;
+                    else if (_grid.Terrain[targetCell] == TerrainType.Highlands) pixelCost = 7.5;
+
                     if (defender != null && defender.IsAlive)
                     {
                         double defenderDensity = defender.Troops / Math.Max(10, defender.TileCount);
@@ -589,6 +770,18 @@ namespace MeWorld.Nations
                     }
                 }
 
+                if (wave.TargetOwnerId == 0 && wave.ActiveFrontier.Count > 24)
+                {
+                    wave.ActiveFrontier.Sort((a, b) =>
+                    {
+                        _grid.GetXY(a, out int ax, out int ay);
+                        _grid.GetXY(b, out int bx, out int by);
+                        int da = (ax - wave.SeedGridX) * (ax - wave.SeedGridX) + (ay - wave.SeedGridY) * (ay - wave.SeedGridY);
+                        int db = (bx - wave.SeedGridX) * (bx - wave.SeedGridX) + (by - wave.SeedGridY) * (by - wave.SeedGridY);
+                        return da.CompareTo(db);
+                    });
+                }
+
                 if (wave.RemainingTroops <= 5.0)
                 {
                     _activeWaves.RemoveAt(wIdx);
@@ -635,9 +828,23 @@ namespace MeWorld.Nations
             {
                 NationData n = _nationList[i];
                 int c = n.Id < _counts.Length ? _counts[n.Id] : 0;
+                bool wasAlive = n.IsAlive;
                 n.TileCount = c;
                 n.WorldControlPercent = c * invTotalLand;
                 n.IsAlive = c > 0;
+
+                if (wasAlive && c == 0)
+                {
+                    // OpenFront plunder mechanic: conqueror plunders victim's gold treasury
+                    int capIdx = _grid.GetIndex(n.CapitalX, n.CapitalY);
+                    ushort conquerorId = _grid.InBounds(n.CapitalX, n.CapitalY) ? _grid.OwnerId[capIdx] : (ushort)0;
+                    if (conquerorId > 0 && _nations.TryGetValue(conquerorId, out NationData conqueror) && conqueror.IsAlive)
+                    {
+                        conqueror.Gold += n.Gold;
+                        conqueror.Troops = Math.Min(conqueror.MaxTroops, conqueror.Troops + n.Troops * 0.35);
+                        OnNationPlundered?.Invoke(conqueror, n);
+                    }
+                }
 
                 if (c > 0)
                 {

@@ -13,8 +13,120 @@ namespace MeWorld.UI
         private static Sprite _crownSprite;
         private static Sprite _shieldSprite;
         private static TMPro.TMP_FontAsset _fallbackFont;
+        private static Sprite _swordsIcon;
+        private static Sprite _globeIcon;
+        private static Sprite _settingsGearIcon;
+        private static Sprite _bookIcon;
+        private static Sprite _doorExitIcon;
+        private static Sprite _sliderKnobSprite;
+        private static Sprite _handshakeIcon;
+        private static Sprite _brokenHeartIcon;
+        private static Sprite _embargoIcon;
+        private static Sprite _coinIcon;
+        private static Sprite _shieldIcon;
+        private static Sprite _chatBubbleIcon;
+        private static Sprite _searchIcon;
         private static readonly Dictionary<StructureType, Sprite> _actionIcons = new Dictionary<StructureType, Sprite>();
         private static readonly Sprite[] _topBarIcons = new Sprite[6];
+
+        public static Sprite GetSwordsIcon()
+        {
+            if (_swordsIcon != null) return _swordsIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            DrawThickLine(tex, new Vector2(6, 6), new Vector2(26, 26), 2.5f, w);
+            DrawThickLine(tex, new Vector2(26, 6), new Vector2(6, 26), 2.5f, w);
+            DrawThickLine(tex, new Vector2(8, 14), new Vector2(14, 8), 2.2f, w);
+            DrawThickLine(tex, new Vector2(24, 14), new Vector2(18, 8), 2.2f, w);
+            tex.Apply();
+            _swordsIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _swordsIcon;
+        }
+
+        public static Sprite GetGlobeIcon()
+        {
+            if (_globeIcon != null) return _globeIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            for (int y = 0; y < s; y++)
+            {
+                for (int x = 0; x < s; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(15.5f, 15.5f));
+                    if (d >= 11.5f && d <= 13.5f) tex.SetPixel(x, y, w);
+                    if (Mathf.Abs(y - 15.5f) <= 1.0f && d <= 12f) tex.SetPixel(x, y, w);
+                    if (Mathf.Abs(x - 15.5f) <= 1.0f && d <= 12f) tex.SetPixel(x, y, w);
+                    float ex = (x - 15.5f) / 6.0f;
+                    float ey = (y - 15.5f) / 12.0f;
+                    if (Mathf.Abs(ex * ex + ey * ey - 1f) < 0.25f && d <= 12f) tex.SetPixel(x, y, w);
+                }
+            }
+            tex.Apply();
+            _globeIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _globeIcon;
+        }
+
+        public static Sprite GetSettingsGearIcon()
+        {
+            if (_settingsGearIcon != null) return _settingsGearIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillCircle(tex, 16, 16, 8.5f, w);
+            FillCircle(tex, 16, 16, 4.2f, Color.clear);
+            FillRect(tex, 14, 3, 4, 26, w);
+            FillRect(tex, 3, 14, 26, 4, w);
+            DrawThickLine(tex, new Vector2(6, 6), new Vector2(26, 26), 4f, w);
+            DrawThickLine(tex, new Vector2(6, 26), new Vector2(26, 6), 4f, w);
+            FillCircle(tex, 16, 16, 3.2f, Color.clear);
+            tex.Apply();
+            _settingsGearIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _settingsGearIcon;
+        }
+
+        public static Sprite GetBookIcon()
+        {
+            if (_bookIcon != null) return _bookIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillRect(tex, 6, 6, 9, 20, w);
+            FillRect(tex, 17, 6, 9, 20, w);
+            FillRect(tex, 14, 4, 4, 24, w);
+            FillCircle(tex, 16, 5, 2f, w);
+            tex.Apply();
+            _bookIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _bookIcon;
+        }
+
+        public static Sprite GetDoorExitIcon()
+        {
+            if (_doorExitIcon != null) return _doorExitIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillRect(tex, 6, 4, 12, 24, w);
+            FillRect(tex, 9, 7, 7, 18, Color.clear);
+            FillRect(tex, 14, 14, 10, 4, w);
+            FillTriangle(tex, new Vector2(22, 11), new Vector2(28, 16), new Vector2(22, 21), w);
+            tex.Apply();
+            _doorExitIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _doorExitIcon;
+        }
+
+        public static Sprite GetSliderKnobSprite()
+        {
+            if (_sliderKnobSprite != null) return _sliderKnobSprite;
+            int s = 24;
+            Texture2D tex = CreateBlankTex(s);
+            FillCircle(tex, 12, 12, 9f, Color.white);
+            FillCircle(tex, 12, 12, 6f, new Color32(245, 158, 42, 255));
+            tex.Apply();
+            _sliderKnobSprite = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 24f);
+            return _sliderKnobSprite;
+        }
 
         public static Sprite GetTopBarIcon(int index)
         {
@@ -94,6 +206,132 @@ namespace MeWorld.UI
             Sprite sp = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 24f);
             _topBarIcons[index] = sp;
             return sp;
+        }
+
+        public static Sprite GetHandshakeIcon()
+        {
+            if (_handshakeIcon != null) return _handshakeIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillRect(tex, 4, 18, 8, 6, w);
+            FillRect(tex, 20, 8, 8, 6, w);
+            DrawThickLine(tex, new Vector2(10, 20), new Vector2(17, 13), 3.5f, w);
+            DrawThickLine(tex, new Vector2(15, 12), new Vector2(22, 10), 3.5f, w);
+            FillCircle(tex, 16, 15, 3.8f, w);
+            tex.Apply();
+            _handshakeIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _handshakeIcon;
+        }
+
+        public static Sprite GetBrokenHeartIcon()
+        {
+            if (_brokenHeartIcon != null) return _brokenHeartIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillCircle(tex, 11, 20, 6.2f, w);
+            FillCircle(tex, 21, 20, 6.2f, w);
+            FillTriangle(tex, new Vector2(5, 18), new Vector2(27, 18), new Vector2(16, 5), w);
+            DrawThickLine(tex, new Vector2(16, 25), new Vector2(14, 19), 2.2f, Color.clear);
+            DrawThickLine(tex, new Vector2(14, 19), new Vector2(18, 13), 2.2f, Color.clear);
+            DrawThickLine(tex, new Vector2(18, 13), new Vector2(16, 6), 2.2f, Color.clear);
+            tex.Apply();
+            _brokenHeartIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _brokenHeartIcon;
+        }
+
+        public static Sprite GetEmbargoIcon()
+        {
+            if (_embargoIcon != null) return _embargoIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            for (int y = 0; y < s; y++)
+            {
+                for (int x = 0; x < s; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(15.5f, 15.5f));
+                    if (d >= 8.5f && d <= 12.5f) tex.SetPixel(x, y, w);
+                }
+            }
+            DrawThickLine(tex, new Vector2(8, 23), new Vector2(23, 8), 2.8f, w);
+            tex.Apply();
+            _embargoIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _embargoIcon;
+        }
+
+        public static Sprite GetCoinIcon()
+        {
+            if (_coinIcon != null) return _coinIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillCircle(tex, 16, 16, 11f, w);
+            FillCircle(tex, 16, 16, 8.5f, Color.clear);
+            FillRect(tex, 14, 8, 4, 16, w);
+            FillRect(tex, 12, 14, 8, 4, w);
+            tex.Apply();
+            _coinIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _coinIcon;
+        }
+
+        public static Sprite GetShieldIcon()
+        {
+            if (_shieldIcon != null) return _shieldIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            for (int y = 5; y <= 26; y++)
+            {
+                float t = (y - 5f) / 21f;
+                int halfW = y > 15 ? 10 : Mathf.RoundToInt(Mathf.Lerp(1.5f, 10f, t / 0.5f));
+                for (int x = 16 - halfW; x <= 16 + halfW; x++)
+                {
+                    tex.SetPixel(x, y, w);
+                }
+            }
+            FillRect(tex, 14, 11, 4, 10, Color.clear);
+            FillRect(tex, 11, 14, 10, 4, Color.clear);
+            tex.Apply();
+            _shieldIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _shieldIcon;
+        }
+
+        public static Sprite GetChatBubbleIcon()
+        {
+            if (_chatBubbleIcon != null) return _chatBubbleIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            FillCircle(tex, 16, 17, 10.5f, w);
+            FillTriangle(tex, new Vector2(8, 12), new Vector2(16, 12), new Vector2(6, 4), w);
+            FillCircle(tex, 12, 17, 1.8f, Color.clear);
+            FillCircle(tex, 16, 17, 1.8f, Color.clear);
+            FillCircle(tex, 20, 17, 1.8f, Color.clear);
+            tex.Apply();
+            _chatBubbleIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _chatBubbleIcon;
+        }
+
+        public static Sprite GetSearchIcon()
+        {
+            if (_searchIcon != null) return _searchIcon;
+            int s = 32;
+            Texture2D tex = CreateBlankTex(s);
+            Color w = Color.white;
+            for (int y = 0; y < s; y++)
+            {
+                for (int x = 0; x < s; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(13.5f, 18.5f));
+                    if (d >= 6.5f && d <= 9.5f) tex.SetPixel(x, y, w);
+                }
+            }
+            DrawThickLine(tex, new Vector2(19, 13), new Vector2(27, 5), 3.2f, w);
+            tex.Apply();
+            _searchIcon = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 32f);
+            return _searchIcon;
         }
 
         public static TMPro.TMP_FontAsset GetDefaultFont()

@@ -3,6 +3,20 @@ using UnityEngine;
 
 namespace MeWorld.Nations
 {
+    public enum DiplomacyEmote : byte
+    {
+        None = 0,
+        Peace = 1,
+        War = 2,
+        ThumbsUp = 3,
+        Skull = 4,
+        Clown = 5,
+        SOS = 6,
+        Gold = 7,
+        Heart = 8,
+        Betrayal = 9
+    }
+
     public class NationData
     {
         public ushort Id;
@@ -29,6 +43,9 @@ namespace MeWorld.Nations
         public int CapitalY;
 
         public readonly HashSet<ushort> Allies = new HashSet<ushort>();
+        public readonly HashSet<ushort> Embargoes = new HashSet<ushort>();
+        public readonly Dictionary<ushort, float> Relations = new Dictionary<ushort, float>();
+        public float TraitorTimer = 0f;
 
         public int CityCount;
         public int PortCount;
@@ -40,6 +57,23 @@ namespace MeWorld.Nations
         public bool IsAlliedWith(ushort otherId)
         {
             return Allies.Contains(otherId);
+        }
+
+        public bool HasEmbargoAgainst(ushort otherId)
+        {
+            return Embargoes.Contains(otherId);
+        }
+
+        public float GetRelationWith(ushort otherId)
+        {
+            if (Relations.TryGetValue(otherId, out float r)) return r;
+            return 0f;
+        }
+
+        public void AdjustRelation(ushort otherId, float delta)
+        {
+            float cur = GetRelationWith(otherId);
+            Relations[otherId] = Mathf.Clamp(cur + delta, -100f, 100f);
         }
     }
 

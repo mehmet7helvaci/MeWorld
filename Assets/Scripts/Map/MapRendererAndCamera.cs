@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MeWorld.Core;
 using MeWorld.Nations;
+using MeWorld.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -38,7 +39,7 @@ namespace MeWorld.Map
             _pixelBuffer = new Color32[_grid.TotalCells];
             _mapTexture = new Texture2D(_grid.Width, _grid.Height, TextureFormat.RGBA32, false)
             {
-                filterMode = FilterMode.Bilinear,
+                filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp
             };
 
@@ -161,6 +162,33 @@ namespace MeWorld.Map
             gx = Mathf.FloorToInt(worldPos.x * GameConfig.PixelsPerUnit + _grid.Width * 0.5f);
             gy = Mathf.FloorToInt(worldPos.y * GameConfig.PixelsPerUnit + _grid.Height * 0.5f);
             return _grid.InBounds(gx, gy);
+        }
+
+        private GameObject _spawnIndicator;
+        private SpriteRenderer _spawnIndicatorSr;
+
+        public void SetSpawnIndicator(int gx, int gy, bool active)
+        {
+            if (!active)
+            {
+                if (_spawnIndicator != null) _spawnIndicator.SetActive(false);
+                return;
+            }
+
+            if (_spawnIndicator == null)
+            {
+                _spawnIndicator = new GameObject("Spawn_Indicator");
+                _spawnIndicator.transform.SetParent(transform, false);
+                _spawnIndicatorSr = _spawnIndicator.AddComponent<SpriteRenderer>();
+                _spawnIndicatorSr.sprite = ProceduralSpriteFactory.GetCircleSprite(true);
+                _spawnIndicatorSr.color = new Color32(233, 59, 129, 220); // Pink player border
+                _spawnIndicatorSr.sortingOrder = 50;
+                _spawnIndicator.transform.localScale = new Vector3(3.2f, 3.2f, 1f);
+            }
+
+            _spawnIndicator.SetActive(true);
+            Vector3 wp = GridToWorld(gx, gy);
+            _spawnIndicator.transform.position = new Vector3(wp.x, wp.y, -1f);
         }
     }
 

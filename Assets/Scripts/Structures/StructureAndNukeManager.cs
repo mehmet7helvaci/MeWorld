@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MeWorld.Core;
 using MeWorld.Map;
 using MeWorld.Nations;

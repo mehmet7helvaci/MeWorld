@@ -272,3 +272,186 @@
   - **Yapılacaklar:**
     - Unity Play Mode'da tüm düzeltmeleri test et, konsol hata/uyarı loglarını kontrol et ve son ekran görüntüsünü yakala.
   - **Kabul Kriterleri:** Sıfır konsol hatası ve kusursuz çalışan RoWorld deneyimi.
+
+---
+
+## FAZ 6: RoWorld Ana Menü, Zorluk/İzleyici Seçimi ve Kısayol Tuşları (Keybindings) Sistemi
+- [x] **Görev 6.1: KeybindManager ve Kalıcı Ayarlar Modeli (Assets/Scripts/Core/KeybindManager.cs)**
+  - **Dosya Yolu:** Assets/Scripts/Core/KeybindManager.cs
+  - **Yapılanlar:**
+    - KeyAction enum'u ile bina (Fabrika, Şehir, Liman, Savunma, SAM, Silo, Atom, Hidrojen, Gemi, İttifak) ve kontrol (Başkent, Pause, Cancel/Menu) aksiyonları tanımlandı.
+    - Kullanıcının talebi doğrultusunda Fabrika kısayolu varsayılan olarak Key.F, Şehir Key.Digit1, Liman Key.Digit2, Başkente Odaklanma Key.Space, Menü/İptal Key.Escape olarak atandı.
+    - Çalışma zamanında klavyeden basılan tuşu algılayan dinamik rebind sistemi yazıldı.
+    - PlayerPrefs ile tuş atamaları, zorluk (GameDifficulty), oyun modu (GamePlayMode), ses seviyesi ve harita etiketleri kalıcı hale getirildi.
+  - **Kabul Kriterleri:** C# Roslyn & Unity derleme hatasız tamamlandı.
+
+- [x] **Görev 6.2: RoWorld Orijinal Tasarımında Ana Menü ve Modallar (Assets/Scripts/UI/MainMenuController.cs)**
+  - **Dosya Yolu:** Assets/Scripts/UI/MainMenuController.cs
+  - **Yapılanlar:**
+    - RoWorld başlığı, "[World PvP]" etiketi, koyu lacivert/amber renk paleti ve prosedürel ikonlarla donatılmış ana menü ekranı inşa edildi.
+    - **Solo Oyna:** Alt panelinde 4 zorluk seçeneği (Kolay, Normal, Zor, Kaos), 2 oyun modu (Standart Fetih ve İzleyici Modu), Dünya Tohumu (Seed) ve rastgele tohum üretici eklendi.
+    - **Çok Oyunculu:** Başka sahneye yönlendirmeden kullanıcıya çok oyunculu altyapısının geliştirildiğini bildiren profesyonel modal bağlandı.
+    - **Ayarlar:** Canlı tuş atama (Rebind) sekmesi ve Ses/Arayüz ayarları sekmesi eklendi.
+    - **Nasıl Oynanır:** Oyun kurallarını, %80 fetih şartını ve nükleer silahları anlatan rehber modalı eklendi.
+  - **Kabul Kriterleri:** UI ekranları eksiksiz, dinamik rebind çalışır durumda.
+
+- [x] **Görev 6.3: Oyun İçi Kısayol Dinleyicisi, Pause Menüsü ve HUD Rozetleri (Assets/Scripts/Core/GameManagerAndBootstrapper.cs & Assets/Scripts/UI/RoWorldHUDController.cs)**
+  - **Dosya Yolu:** Assets/Scripts/Core/GameManagerAndBootstrapper.cs & Assets/Scripts/UI/RoWorldHUDController.cs
+  - **Yapılanlar:**
+    - Alt bardaki 10 aksiyon butonunun sağ üst köşesine aktif kısayol tuşu rozeti ([F], [1], [2] vb.) eklendi; tuş değiştiğinde otomatik güncelleniyor.
+    - Oyun esnasında klavyeden tuşlara basıldığında anında ilgili bina/aksiyon seçimi tetikleniyor.
+    - Escape veya sol üstteki ayarlar çarkına basıldığında oyunu duraklatıp "Devam Et", "Ayarlar", "Yeniden Başlat", "Ana Menüye Dön" seçenekleri sunan Oyun İçi Pause Menüsü eklendi.
+    - Ana menüye dönüşte sahne nesneleri temizlenip menü ekranı geri geliyor.
+  - **Kabul Kriterleri:** Oyun döngüsü ve UI butonları kısayollarla tam entegre.
+
+- [x] **Görev 6.4: Zorluk (Difficulty) ve İzleyici (Spectator) Modunun Simülasyona Entegrasyonu (Assets/Scripts/Nations/AIController.cs & Assets/Scripts/Nations/TerritoryAndCombatManager.cs)**
+  - **Dosya Yolu:** Assets/Scripts/Nations/AIController.cs & Assets/Scripts/Nations/TerritoryAndCombatManager.cs
+  - **Yapılanlar:**
+    - AIController: Kolay/Normal/Zor/Kaos zorluklarına göre AI batch değerlendirme boyutu (8 -> 26) ve genişleme eşiği (%48 -> %20) uyarlandı.
+    - TerritoryAndCombatManager: Başlangıç koruma süresi ve oyuncu kaynakları zorluğa göre ölçeklendi.
+    - İzleyici Modu: Oyuncusuz 88 AI savaşı, serbest kamera dolaşımı ve haritadaki herhangi bir ülkeye tıklandığında anlık istatistik görüntüleme özelliği tamamlandı.
+  - **Kabul Kriterleri:** Savaş ve ekonomi simülasyonu iki modda da hatasız çalışıyor.
+
+- [x] **Görev 6.5: Otomasyon Test Paketi ve Tam Derleme Doğrulaması (Assets/Scripts/Tests/MainMenuAndSettingsTests.cs)**
+  - **Dosya Yolu:** Assets/Scripts/Tests/MainMenuAndSettingsTests.cs
+  - **Yapılanlar:**
+    - Tüm yeni bileşenler için birim ve entegrasyon testlerini içeren test paketi yazıldı.
+    - Roslyn C# derleyicisi ile tüm proje sıfır hata ve sıfır uyarı ile derlendi.
+  - **Kabul Kriterleri:** 0 derleme hatası, 0 uyarı.
+
+---
+
+## FAZ 7: Piksel Netliği (Point Filtering), Organik Harita Çeşitliliği, Özel Ülke İsmi ve İnteraktif Başlangıç Bölgesi Seçimi
+- [x] **Görev 7.1: Harita Bulanıklığının Kaldırılması (Pixel-Crisp Point Filtering) ve Spawn Halkası Göstergesi**
+  - **Dosya Yolu:** `Assets/Scripts/Map/MapRendererAndCamera.cs`
+  - **Yapılanlar:**
+    - `FilterMode.Bilinear` kaldırılıp `FilterMode.Point` mimarisine geçildi; böylece harita pikselleri, ülke sınırları ve kıyı çizgileri bulanıklıktan kurtulup keskin piksel estetiğine kavuştu.
+    - İmlecin altındaki karayı oyuncuya anlık gösteren parlak pembe `SetSpawnIndicator(int gx, int gy, bool active)` görsel göstergesi eklendi.
+  - **Kabul Kriterleri:** Harita jilet gibi keskin, spawn halkası pürüzsüz çalışıyor.
+
+- [x] **Görev 7.2: Dinamik Prosedürel Kıta Üretimi ve Tohum (Seed) Çeşitlendiricisi**
+  - **Dosya Yolu:** `Assets/Scripts/Map/WorldMapGrid.cs`
+  - **Yapılanlar:**
+    - Klasik RoWorld harita yerleşimi tohum `20261103` için korunurken, diğer tüm rastgele tohumlarda çok oktavlı Fractional Brownian Motion (fBm), domain warping, organik kıta çekirdekleri ve deniz boğazları üreten dinamik kıta motoru yazıldı.
+    - Rastgele tohumlarda haritanın bozuk çıkması ve hep aynı çıkması sorunu tamamen çözüldü; her tohumda %48-%52 dengeli kara oranı ve benzersiz coğrafyalar üretiliyor.
+  - **Kabul Kriterleri:** Rastgele tohumlar birbirinden tamamen farklı, organik ve oynanabilir haritalar üretiyor.
+
+- [x] **Görev 7.3: İki Aşamalı Doğuş (Two-Phase Spawning) ve Özelleştirilebilir Ülke İsmi**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/TerritoryAndCombatManager.cs` & `Assets/Scripts/Core/KeybindManager.cs`
+  - **Yapılanlar:**
+    - `KeybindManager` içine `PlayerNationName` özelliği, isim randomizer'ı ve 14 popüler strateji isim havuzu eklendi.
+    - `TerritoryAndCombatManager` iki aşamalı doğuşa uyarlandı (`FindBestStartingLand`, `SpawnPlayerAndAI`, `SpawnSpectatorWorld`). Oyuncu artık hep aynı yerde ve sabit "SnickTrix" adıyla doğmak zorunda değil.
+  - **Kabul Kriterleri:** Özel isim ve seçilen koordinatta başkent kurma simülasyona kusursuz entegre.
+
+- [x] **Görev 7.4: Başlangıç Bölgesi Seçim Arayüzü (Countdown Banner) ve Menü Özelleştirici**
+  - **Dosya Yolu:** `Assets/Scripts/UI/RoWorldHUDController.cs` & `Assets/Scripts/UI/MainMenuController.cs`
+  - **Yapılanlar:**
+    - Solo Kurulum ekranına "ÜLKE İSMİNİZ" özelleştirme kutusu, "RASTGELE İSİM" butonu ve "KLASİK HARİTA (20261103)" ile "YENİ TOHUM" butonları eklendi.
+    - Oyun başladığında ekranın üstünde 10 saniyelik geri sayım sayacı, "BAŞLANGIÇ BÖLGENİZİ SEÇİN" yönergesi ve "RASTGELE SEÇ" butonu içeren şık bir banner gösteriliyor.
+  - **Kabul Kriterleri:** Geri sayım sayacı, rastgele seçim ve alt paneldeki özel isim göstergesi eksiksiz çalışıyor.
+
+- [x] **Görev 7.5: Oyun Döngüsü Entegrasyonu, Harita Tıklama ile Başkent Kurma ve Testler**
+  - **Dosya Yolu:** `Assets/Scripts/Core/GameManagerAndBootstrapper.cs` & `Assets/Scripts/Tests/MainMenuAndSettingsTests.cs`
+  - **Yapılanlar:**
+    - `GameManager` döngüsüne `_isSpawnSelecting` durumu entegre edildi. 10 saniye boyunca oyuncu WASD veya fareyle haritada gezip dilediği bir karaya sol tıklayarak veya geri sayım bitince otomatik olarak başkentini kuruyor.
+    - Başkent kurulduğu anda dünya etiketleri, AI ulusları ve kabileler oluşturulup kamera oyuncu başkentine yumuşakça odaklanıyor.
+    - `MainMenuAndSettingsTests.cs` güncellendi ve tüm testler Roslyn ile sıfır derleme hatasıyla doğrulandı.
+  - **Kabul Kriterleri:** 0 derleme hatası, uçtan uca akıcı doğuş deneyimi.
+
+---
+
+## FAZ 8: Otantik RoWorld / OpenFront Başlangıç Mekaniği (Mütevazı Başlangıç, 42% Büyüme, Yağmalama ve Bakir Topraklar)
+- [x] **Görev 8.1: Yapay Voronoi Yayılmasının Kaldırılması ve Bakir/Tarafsız Toprakların (%85+) Korunması**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/TerritoryAndCombatManager.cs`
+  - **Yapılanlar:**
+    - Haritayı başlangıçta zorla dolduran yapay `ExpandTerritoriesVoronoi()` kaldırıldı.
+    - Dünya karalarının ~%85'i bakir tarafsız toprak (`OwnerId = 0`) olarak bırakıldı; böylece oyun başlangıcı orijinal RoWorld / OpenFront'taki gibi gerçek bir toprak fetih ve yayılma yarışına dönüştürüldü.
+  - **Kabul Kriterleri:** Harita başlangıçta açık yeşil/bej bakir topraklarla başlar, ülkeler küçük odaklar olarak görünür.
+
+- [x] **Görev 8.2: Başlangıç Boyutunun ve Kaynaklarının Otantik Ölçeklenmesi**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/TerritoryAndCombatManager.cs`
+  - **Yapılanlar:**
+    - Oyuncunun doğrudan 775K altın ve devasa 900+ piksellik kütleyle başlama hatası düzeltildi.
+    - Oyuncu artık mütevazı bir şehir devleti olarak başlar (radius = 5: ~45-65 piksel).
+    - Başlangıç kaynakları zorluk seviyesine göre ayarlandı:
+      - Normal: `750` asker (Max: `2.5K`), `15.000` altın (`15K`).
+      - Kolay: `1.200` asker (Max: `3.5K`), `35.000` altın (`35K`).
+      - Zor: `500` asker (Max: `1.8K`), `5.000` altın (`5K`).
+      - Kaos: `350` asker (Max: `1.2K`), `0` altın.
+    - AI ulusları (radius 4-6, ~450-800 asker, 6-15K altın) ve Kabileler (radius 3-4, ~180-420 asker, 2-6.5K altın) olarak dengelendi.
+  - **Kabul Kriterleri:** Başlangıç kaynakları ve boyutları referans OpenFront/RoWorld mekanikleriyle birebir uyumlu.
+
+- [x] **Görev 8.3: OpenFront %42 Nüfus Büyüme Eğrisi ve Lojistik Ekonomi**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/TerritoryAndCombatManager.cs`
+  - **Yapılanlar:**
+    - Topluluk rehberlerinde ve wikide belirtilen "~42% Rule" (nüfus büyümesinin asker kapasitesinin %40-%42'sinde zirve yapması, sıfıra yaklaşınca büyümenin çökmesi, %100'e yaklaşınca yavaşlaması) formüle döküldü.
+    - Şehir inşa edildiğinde nüfus tavanı OpenFront'taki gibi devasa +25.000 artacak şekilde bağlandı.
+    - Saniyelik altın geliri başlangıçta dengeli (+120-150/s), toprak fethettikçe ve Fabrika/Liman kurdukça binlere katlanacak şekilde ölçeklendi.
+  - **Kabul Kriterleri:** Nüfus büyümesi ve gelir artışı stratejik kararları ödüllendiren akıcı bir döngüye kavuştu.
+
+- [x] **Görev 8.4: Kabile ve Ulus Fethinde Hazineyi Yağmalama (Plunder) Sistemi**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/TerritoryAndCombatManager.cs` & `Assets/Scripts/Core/GameManagerAndBootstrapper.cs`
+  - **Yapılanlar:**
+    - Bir kabile veya ulusun son toprağı fethedildiğinde (`c == 0`), başkenti ele geçiren ordu hedef ülkenin birikmiş tüm altın hazinesini (`conqueror.Gold += plunderedGold`) ve askerlerinin bir kısmını kendi safına katar.
+    - Oyuncu bir kabileyi veya rakip devleti yok ettiğinde ekranda yağmalanan altın miktarını bildiren anlık ödül banner'ı çıkar.
+  - **Kabul Kriterleri:** Erken oyunda kabileleri fethetmek yüksek altın ödüllü birincil strateji haline geldi.
+
+- [x] **Görev 8.5: Yönlü Fetih Akışı (Directional Expansion) ve Doğrulama Testleri**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/TerritoryAndCombatManager.cs` & `Assets/Scripts/Tests/MainMenuAndSettingsTests.cs`
+  - **Yapılanlar:**
+    - Tarafsız arazilere saldırırken fetih dalgasının oyuncunun tıkladığı yöne doğru akıcı bir hat oluşturarak ilerlemesi sağlandı.
+    - `MainMenuAndSettingsTests.cs` güncellendi, başlangıç toprak boyutu (<120 tile), başlangıç altını (<50K) ve bakir arazi varlığı test edildi.
+    - Roslyn ile tüm proje 0 hata ile derlendi.
+  - **Kabul Kriterleri:** 0 derleme hatası, kusursuz erken oyun akışı.
+
+---
+
+## FAZ 9: Tam Teşekküllü Diplomasi Sistemi ve Sağ Tık Dairesel Diplomasi Tekerleği (Radial Context Menu)
+- [x] **Görev 9.1: Zengin Diplomasi Veri Modeli ve Prosedürel İkonlar (`NationModels.cs`, `ProceduralSpriteFactory.cs`)**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/NationModels.cs` & `Assets/Scripts/UI/ProceduralSpriteFactory.cs`
+  - **Yapılanlar:**
+    - `DiplomacyEmote` enum'ı (`None`, `Peace`, `War`, `ThumbsUp`, `Skull`, `Clown`, `SOS`, `Gold`, `Heart`, `Betrayal`) tanımlandı.
+    - `NationData` modeline `Embargoes` (karşılıklı ticaret ambargoları kümesi), `Relations` (-100 ile +100 arası ikili ilişki skoru), `TraitorTimer` (ittifak bozan devletin güvenilmez damgası) ve yardımcı metotlar eklendi.
+    - `ProceduralSpriteFactory` içine el sıkışma (`Handshake`), kırık kalp (`BrokenHeart`), ambargo kalkanı (`Embargo`), altın sikke (`Coin`), kalkan (`Shield`), konuşma balonu (`ChatBubble`) ve büyüteç (`Search`) prosedürel vektör ikonları eklendi.
+  - **Kabul Kriterleri:** 0 derleme hatası, 0 harici png bağımlılığı.
+
+- [x] **Görev 9.2: Diplomasi Motoru, Reaktif Yapay Zeka ve 2D Dünya İfade Balonları (`DiplomacyManager.cs`)**
+  - **Dosya Yolu:** `Assets/Scripts/Nations/DiplomacyManager.cs`
+  - **Yapılanlar:**
+    - `ProposeOrFormAlliance`, `BreakAlliance`, `ToggleTradeEmbargo`, `DonateGold`, `DonateTroops`, `SendEmote` metotları yazıldı.
+    - İttifak bozulduğunda oyuncu 60 saniyeliğine "Hain/Traitor" statüsüne alınır ve komşu devletlerin güveni zedelenir.
+    - Gönderilen her emoji veya diplomasi aksiyonunda hedef devletin başkenti üzerinde 2D konuşma balonu (`WorldFloatingEmote`) belirir, yukarı doğru süzülerek solar.
+    - Yapay zeka gönderilen emojilere veya bağışlara reaktif yanıtlar (`DelayedAIReply`) verir (Barışa barışla veya tehdide savaş emojisiyle karşılık verme).
+  - **Kabul Kriterleri:** Canlı, etkileşimli ve dinamik diplomasi simülasyonu.
+
+- [x] **Görev 9.3: Bağlamsal Dairesel Diplomasi Menüsü UI (`RadialContextMenu.cs`)**
+  - **Dosya Yolu:** `Assets/Scripts/UI/RadialContextMenu.cs`
+  - **Yapılanlar:**
+    - Orijinal RoWorld / OpenFront'taki gibi dairesel bir yörüngede 6 aksiyon pedalı içeren bağlamsal tekerlek menüsü oluşturuldu:
+      - 1. İttifak Kur / İttifakı Boz
+      - 2. Ticari Ambargo Uygula / Ambargoyu Kaldır
+      - 3. Altın Gönder (+10K, +25K, +50K, +100K tepsisi)
+      - 4. Asker Gönder (%25 takviye gücü)
+      - 5. Emoji & Tepki Gönder (Barış, Savaş, Dostluk, Tehdit, Alay, SOS tepsisi)
+      - 6. İstihbarat Raporu (Hedefin askeri, ekonomik ve şehir/liman durumu)
+    - Merkez çarkta hedef ülkenin adı, ulus rengi halkası, diplomasi rozeti ([MÜTTEFİK], [AMBARGO], [DÜŞMAN], [BARIŞ]) ve anlık istatistik özeti yer alır.
+    - Akıcı pop-in ölçeklenme animasyonu eklendi.
+  - **Kabul Kriterleri:** Eksiksiz, şık RoWorld HUD tarzı dairesel diplomasi arayüzü.
+
+- [x] **Görev 9.4: Harita Sağ Tık Entegrasyonu, Ambargo Ekonomisi ve İptal Mekaniği**
+  - **Dosya Yolu:** `Assets/Scripts/Core/GameManagerAndBootstrapper.cs`, `Assets/Scripts/UI/RoWorldHUDController.cs`, `Assets/Scripts/Nations/TerritoryAndCombatManager.cs`
+  - **Yapılanlar:**
+    - Haritada herhangi bir yabancı devlete sağ tıklandığında imleç konumunda dairesel diplomasi tekerleği açılır.
+    - Açıkken dışarıya tıklandığında veya `Escape` tuşuna basıldığında menü temiz bir şekilde kapanır.
+    - `TerritoryAndCombatManager.TickEconomy` içinde aktif ambargolar hedef ve kaynak ülkenin altın büyüme hızına ekonomik yaptırım cezası (her ambargo başına %12 düşüş, min %55 taban) uygular.
+    - `Tick` metodunda `TraitorTimer` sayaçları her saniye düzenli olarak azaltılır.
+  - **Kabul Kriterleri:** Sezgisel kontrol, takılmayan harita kontrolleri, gerçekçi ekonomik yaptırımlar.
+
+- [x] **Görev 9.5: Kapsamlı Otomasyon Testleri ve Derleme Doğrulaması**
+  - **Dosya Yolu:** `Assets/Scripts/Tests/MainMenuAndSettingsTests.cs`
+  - **Yapılanlar:**
+    - Test sınıfına Bölüm 6 ("Comprehensive Diplomacy Suite & Radial Menu Tests") eklendi: İttifak kurma, bozma, hain sayacı, ambargo yaptırımı ve kaldırma, altın bağışı, asker desteği, emoji tepkileri, dünya balonları ve dairesel menü yaşam döngüsü simüle edilerek doğrulandı.
+    - Roslyn C# derleyicisi ile tüm 16 C# kaynak dosyası 0 hata ile derlendi.
+  - **Kabul Kriterleri:** 0 derleme hatası, tüm testler yeşil.
+
+

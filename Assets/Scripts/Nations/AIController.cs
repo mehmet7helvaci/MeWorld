@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MeWorld.Core;
 using MeWorld.Map;
 using MeWorld.Structures;
@@ -29,26 +29,35 @@ namespace MeWorld.Nations
             IReadOnlyList<NationData> list = _territoryManager.NationList;
             if (list.Count == 0) return;
 
-            // Process 12 AI entities per tick so CPU stays minimal while all 198 nations act every ~1.6 seconds
+            GameDifficulty diff = KeybindManager.Instance.CurrentDifficulty;
             int batchSize = 12;
+            switch (diff)
+            {
+                case GameDifficulty.Easy: batchSize = 8; break;
+                case GameDifficulty.Hard: batchSize = 18; break;
+                case GameDifficulty.Chaos: batchSize = 26; break;
+            }
+
             for (int b = 0; b < batchSize; b++)
             {
                 _rollingIndex = (_rollingIndex + 1) % list.Count;
                 NationData ai = list[_rollingIndex];
                 if (ai.IsPlayer || !ai.IsAlive) continue;
 
-                EvaluateAI(ai);
+                EvaluateAI(ai, diff);
             }
         }
 
-        private void EvaluateAI(NationData ai)
+        private void EvaluateAI(NationData ai, GameDifficulty diff)
         {
             double fillRatio = ai.MaxTroops > 0 ? (ai.Troops / ai.MaxTroops) : 0.0;
 
             // Tribes expand very rarely and never build high-tech structures
             if (ai.IsTribe)
             {
-                if (fillRatio > 0.78 && UnityEngine.Random.value < 0.18f)
+                float tribeExpandThreshold = diff == GameDifficulty.Chaos ? 0.60f : 0.78f;
+                float tribeChance = diff == GameDifficulty.Chaos ? 0.35f : 0.18f;
+                if (fillRatio > tribeExpandThreshold && UnityEngine.Random.value < tribeChance)
                 {
                     if (FindNeighborTarget(ai, out ushort targetId, out int gx, out int gy, true))
                     {
@@ -63,7 +72,15 @@ namespace MeWorld.Nations
             TryAIBuildStructures(ai);
 
             // 2. Expand into neutral territory or weak neighbors when troop reserve is healthy
-            if (fillRatio >= 0.36)
+            double expandThreshold = 0.36;
+            switch (diff)
+            {
+                case GameDifficulty.Easy: expandThreshold = 0.48; break;
+                case GameDifficulty.Hard: expandThreshold = 0.28; break;
+                case GameDifficulty.Chaos: expandThreshold = 0.20; break;
+            }
+
+            if (fillRatio >= expandThreshold)
             {
                 if (FindNeighborTarget(ai, out ushort targetId, out int gx, out int gy, false))
                 {

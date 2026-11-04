@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using MeWorld.Core;
 using UnityEngine;
 
@@ -71,7 +71,164 @@ namespace MeWorld.Map
 
         public void GenerateProceduralWorld(int seed)
         {
+            TotalLandCells = 0;
+
+            if (seed == 20261103)
+            {
+                GenerateClassicRoWorldMap();
+                return;
+            }
+
+            GenerateDynamicProceduralMap(seed);
+        }
+
+        private void GenerateDynamicProceduralMap(int seed)
+        {
             System.Random rng = new System.Random(seed);
+
+            // 4 to 8 continental cores distributed across the map
+            int coreCount = rng.Next(5, 9);
+            Vector2[] cores = new Vector2[coreCount];
+            float[] coreRadiusX = new float[coreCount];
+            float[] coreRadiusY = new float[coreCount];
+            float[] coreWeight = new float[coreCount];
+
+            for (int i = 0; i < coreCount; i++)
+            {
+                cores[i] = new Vector2(
+                    (float)(rng.NextDouble() * 0.70 + 0.15),
+                    (float)(rng.NextDouble() * 0.66 + 0.17)
+                );
+                coreRadiusX[i] = (float)(rng.NextDouble() * 0.16 + 0.12);
+                coreRadiusY[i] = (float)(rng.NextDouble() * 0.14 + 0.10);
+                coreWeight[i] = (float)(rng.NextDouble() * 0.35 + 0.75);
+            }
+
+            int seaCount = rng.Next(2, 5);
+            Vector2[] seaCenters = new Vector2[seaCount];
+            float[] seaRadius = new float[seaCount];
+            for (int s = 0; s < seaCount; s++)
+            {
+                seaCenters[s] = new Vector2(
+                    (float)(rng.NextDouble() * 0.60 + 0.20),
+                    (float)(rng.NextDouble() * 0.60 + 0.20)
+                );
+                seaRadius[s] = (float)(rng.NextDouble() * 0.08 + 0.06);
+            }
+
+            float ox1 = (float)(rng.NextDouble() * 1000.0);
+            float oy1 = (float)(rng.NextDouble() * 1000.0);
+            float ox2 = (float)(rng.NextDouble() * 1000.0);
+            float oy2 = (float)(rng.NextDouble() * 1000.0);
+            float ox3 = (float)(rng.NextDouble() * 1000.0);
+            float oy3 = (float)(rng.NextDouble() * 1000.0);
+            float oxWarp = (float)(rng.NextDouble() * 1000.0);
+            float oyWarp = (float)(rng.NextDouble() * 1000.0);
+
+            float[] rawHeights = new float[TotalCells];
+            float maxH = float.MinValue;
+
+            for (int y = 0; y < Height; y++)
+            {
+                float ny = (float)y / Height;
+                for (int x = 0; x < Width; x++)
+                {
+                    float nx = (float)x / Width;
+                    int idx = y * Width + x;
+
+                    // Domain Warping for organic, non-circular coastlines
+                    float warpX = (Mathf.PerlinNoise(oxWarp + nx * 3.2f, oyWarp + ny * 3.2f) - 0.5f) * 0.15f;
+                    float warpY = (Mathf.PerlinNoise(oxWarp + nx * 3.2f + 30f, oyWarp + ny * 3.2f + 30f) - 0.5f) * 0.15f;
+                    float wnx = nx + warpX;
+                    float wny = ny + warpY;
+
+                    float maxCoreScore = 0f;
+                    for (int i = 0; i < coreCount; i++)
+                    {
+                        float dx = (wnx - cores[i].x) / coreRadiusX[i];
+                        float dy = (wny - cores[i].y) / coreRadiusY[i];
+                        float distSq = dx * dx + dy * dy;
+                        float score = Mathf.Exp(-distSq * 2.0f) * coreWeight[i];
+                        if (score > maxCoreScore) maxCoreScore = score;
+                    }
+
+                    float seaCarve = 0f;
+                    for (int s = 0; s < seaCount; s++)
+                    {
+                        float dx = (wnx - seaCenters[s].x) / seaRadius[s];
+                        float dy = (wny - seaCenters[s].y) / seaRadius[s];
+                        float dSq = dx * dx + dy * dy;
+                        seaCarve = Mathf.Max(seaCarve, Mathf.Exp(-dSq * 3.0f) * 0.55f);
+                    }
+
+                    float n1 = Mathf.PerlinNoise(ox1 + wnx * 3.6f, oy1 + wny * 3.6f);
+                    float n2 = Mathf.PerlinNoise(ox2 + wnx * 8.5f, oy2 + wny * 8.5f) * 0.48f;
+                    float n3 = Mathf.PerlinNoise(ox3 + wnx * 19.0f, oy3 + wny * 19.0f) * 0.24f;
+                    float fbm = (n1 + n2 + n3) / 1.72f;
+
+                    float edgeX = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(Mathf.Min(nx, 1f - nx) / 0.055f));
+                    float edgeY = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(Mathf.Min(ny, 1f - ny) / 0.065f));
+                    float edgeMask = edgeX * edgeY;
+
+                    float h = (fbm * 0.48f + maxCoreScore * 0.58f - seaCarve) * edgeMask;
+                    rawHeights[idx] = h;
+                    if (h > maxH) maxH = h;
+                }
+            }
+
+            int sampleCount = 4000;
+            float[] samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                int sIdx = rng.Next(0, TotalCells);
+                samples[i] = rawHeights[sIdx];
+            }
+            Array.Sort(samples);
+            float waterThreshold = samples[Mathf.RoundToInt(sampleCount * 0.51f)];
+
+            for (int idx = 0; idx < TotalCells; idx++)
+            {
+                float h = rawHeights[idx];
+                OwnerId[idx] = 0;
+                IsBorder[idx] = false;
+
+                if (h < waterThreshold - 0.075f)
+                {
+                    Terrain[idx] = TerrainType.DeepOcean;
+                    Elevation[idx] = 0.2f;
+                }
+                else if (h < waterThreshold)
+                {
+                    Terrain[idx] = TerrainType.ShallowWater;
+                    Elevation[idx] = 0.38f;
+                }
+                else
+                {
+                    TotalLandCells++;
+                    float landElev = (h - waterThreshold) / Mathf.Max(0.001f, maxH - waterThreshold);
+                    Elevation[idx] = Mathf.Clamp01(0.5f + landElev * 0.5f);
+
+                    if (landElev < 0.42f)
+                    {
+                        Terrain[idx] = TerrainType.Plains;
+                    }
+                    else if (landElev < 0.74f)
+                    {
+                        Terrain[idx] = TerrainType.Highlands;
+                    }
+                    else
+                    {
+                        Terrain[idx] = TerrainType.Mountains;
+                    }
+                }
+            }
+
+            RecalculateCoasts();
+        }
+
+        private void GenerateClassicRoWorldMap()
+        {
+            System.Random rng = new System.Random(20261103);
             float ox1 = (float)(rng.NextDouble() * 500.0 + 10.0);
             float oy1 = (float)(rng.NextDouble() * 500.0 + 10.0);
             float ox2 = (float)(rng.NextDouble() * 500.0 + 10.0);
@@ -79,44 +236,33 @@ namespace MeWorld.Map
             float ox3 = (float)(rng.NextDouble() * 500.0 + 10.0);
             float oy3 = (float)(rng.NextDouble() * 500.0 + 10.0);
 
-            TotalLandCells = 0;
-
-            // Regional continental anchors inspired by the Indian Ocean / Eurasia / Peninsula layout in RoWorld screenshot
             for (int y = 0; y < Height; y++)
             {
-                float ny = (float)y / Height; // 0 bottom, 1 top
+                float ny = (float)y / Height;
                 for (int x = 0; x < Width; x++)
                 {
-                    float nx = (float)x / Width; // 0 left, 1 right
+                    float nx = (float)x / Width;
                     int idx = y * Width + x;
 
-                    // Multi-octave Perlin noise (fBm)
                     float n1 = Mathf.PerlinNoise(ox1 + nx * 4.2f, oy1 + ny * 4.2f);
                     float n2 = Mathf.PerlinNoise(ox2 + nx * 9.5f, oy2 + ny * 9.5f) * 0.45f;
                     float n3 = Mathf.PerlinNoise(ox3 + nx * 21.0f, oy3 + ny * 21.0f) * 0.22f;
                     float fbm = (n1 + n2 + n3) / 1.67f;
 
-                    // Continental landmass mask matching RoWorld screenshot geography:
-                    // 1) Broad Northern Eurasian belt (ny > 0.52)
                     float northBelt = Mathf.Clamp01((ny - 0.48f) * 2.4f);
-
-                    // 2) Central Indian triangular peninsula tapering down to (nx=0.41, ny=0.16)
                     float penWidth = Mathf.Lerp(0.025f, 0.14f, Mathf.Clamp01((ny - 0.16f) / 0.44f));
                     float dxPen = Mathf.Abs(nx - 0.41f) / Mathf.Max(0.02f, penWidth);
                     float dyPen = (ny >= 0.16f && ny <= 0.68f) ? 1.0f : 0.0f;
                     float centralPeninsula = dyPen * Mathf.Clamp01(1.15f - dxPen);
 
-                    // 3) Western Oman/Arabian peninsula on the left (nx: 0.16..0.28, ny: 0.44..0.66)
                     float dxOman = (nx - 0.21f) / 0.09f;
                     float dyOman = (ny - 0.54f) / 0.14f;
                     float omanPeninsula = Mathf.Clamp01(1.12f - Mathf.Sqrt(dxOman * dxOman + dyOman * dyOman));
 
-                    // 4) Eastern Indochina/Malay peninsula on the right (nx: 0.58..0.76, ny: 0.25..0.68)
                     float dxEast = (nx - 0.65f) / 0.11f;
                     float dyEast = (ny - 0.46f) / 0.24f;
                     float eastPeninsula = Mathf.Clamp01(1.10f - Mathf.Sqrt(dxEast * dxEast + dyEast * dyEast));
 
-                    // Carve Arabian Sea (between Oman and India) and Bay of Bengal (between India and East)
                     float arabianSea = Mathf.Exp(-((nx - 0.30f) * (nx - 0.30f) / 0.0025f + (ny - 0.42f) * (ny - 0.42f) / 0.032f)) * 0.72f;
                     float persianGulf = Mathf.Exp(-((nx - 0.26f) * (nx - 0.26f) / 0.0018f + (ny - 0.60f) * (ny - 0.60f) / 0.005f)) * 0.62f;
                     float bayOfBengal = Mathf.Exp(-((nx - 0.51f) * (nx - 0.51f) / 0.0038f + (ny - 0.33f) * (ny - 0.33f) / 0.030f)) * 0.75f;

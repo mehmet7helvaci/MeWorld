@@ -19,9 +19,23 @@ namespace MeWorld.UI
         public float SelectedAttackRatio { get; private set; } = 0.20f;
         public StructureType SelectedAction { get; private set; } = StructureType.None;
         public bool IsPaused { get; private set; } = false;
+        public RectTransform RootRect { get; private set; }
 
         public Action OnFocusPlayerRequested;
         public Action OnRestartRequested;
+        public Action OnOpenSettingsRequested;
+        public Action OnReturnToMainMenuRequested;
+        public Action OnSpawnRandomRequested;
+
+        private GameObject _pauseMenuModal;
+        private GameObject _spawnBannerObj;
+        private TextMeshProUGUI _spawnTimerText;
+        private RectTransform _topCenterPill;
+        private RectTransform _bottomDockBar;
+        private RectTransform _topLeftButtons;
+        private RectTransform _topRightRankPill;
+        private TextMeshProUGUI _playerNameText;
+        public bool IsPauseMenuOpen => _pauseMenuModal != null && _pauseMenuModal.activeSelf;
 
         // Top HUD text references
         private TextMeshProUGUI _protectedTimerText;
@@ -48,12 +62,13 @@ namespace MeWorld.UI
         private readonly List<Image> _ratioButtonBgs = new List<Image>(7);
         private readonly List<TextMeshProUGUI> _ratioButtonLabels = new List<TextMeshProUGUI>(7);
 
-        private class ActionBtnUI
+        public class ActionBtnUI
         {
             public StructureType Type;
             public Image BgImage;
             public Image BorderImage;
             public TextMeshProUGUI CostText;
+            public TextMeshProUGUI HotkeyBadge;
         }
         private readonly List<ActionBtnUI> _actionButtons = new List<ActionBtnUI>(10);
 
@@ -68,6 +83,7 @@ namespace MeWorld.UI
         private static readonly Color ColGreenBright = new Color32(72, 219, 128, 255);
         private static readonly Color ColGoldBright = new Color32(246, 208, 72, 255);
         private static readonly Color ColOrangeAccent = new Color32(245, 158, 42, 255);
+        private static readonly Color ColCyanBright = new Color32(56, 189, 248, 255);
         private static readonly Color ColTextMuted = new Color32(156, 168, 188, 255);
 
         public void Initialize(TerritoryAndCombatManager territoryManager)
@@ -77,6 +93,8 @@ namespace MeWorld.UI
             BuildCanvasAndHUD();
             SelectAttackRatioIndex(1); // Default 20% like screenshot
             RefreshHUD();
+            KeybindManager.Instance.OnKeybindChanged += (act, key) => RefreshKeybindBadges();
+            RefreshKeybindBadges();
         }
 
         private void EnsureEventSystem()
@@ -128,6 +146,7 @@ namespace MeWorld.UI
             canvasObj.AddComponent<GraphicRaycaster>();
 
             RectTransform root = canvasObj.GetComponent<RectTransform>();
+            RootRect = root;
 
             BuildTopLeftButtons(root);
             BuildTopCenterWorldControlPill(root);
@@ -135,11 +154,14 @@ namespace MeWorld.UI
             BuildBottomControlBar(root);
             BuildStatusNotificationBanner(root);
             BuildEndGameOverlay(root);
+            BuildPauseMenuOverlay(root);
+            BuildSpawnSelectionBanner(root);
         }
 
         private void BuildTopLeftButtons(RectTransform root)
         {
             RectTransform container = CreateRect("TopLeftCircularBar", root, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(22, -18), new Vector2(280, 44));
+            _topLeftButtons = container;
 
             for (int i = 0; i < 6; i++)
             {
@@ -153,9 +175,16 @@ namespace MeWorld.UI
                 btn.targetGraphic = bg;
                 btn.onClick.AddListener(() =>
                 {
-                    if (idx == 1) OnFocusPlayerRequested?.Invoke();
+                    if (idx == 0)
+                    {
+                        bool muted = !KeybindManager.Instance.IsMuted;
+                        KeybindManager.Instance.SetMuted(muted);
+                        ShowStatusMessage(muted ? "Ses Kapatıldı (Muted)" : "Ses Açıldı (Audio Active)", 1.5f);
+                    }
+                    else if (idx == 1) OnFocusPlayerRequested?.Invoke();
                     else if (idx == 4) OnRestartRequested?.Invoke();
-                    else ShowStatusMessage(idx == 0 ? "Audio Toggled" : "RoWorld PvP Active");
+                    else if (idx == 5) OpenPauseMenu();
+                    else ShowStatusMessage("RoWorld PvP Aktif", 1.5f);
                 });
 
                 RectTransform iconRt = CreateRect($"Icon_{i}", btnRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20f, 20f));
@@ -169,6 +198,7 @@ namespace MeWorld.UI
         private void BuildTopCenterWorldControlPill(RectTransform root)
         {
             RectTransform pill = CreatePanel("TopWorldControlPill", root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-50f, -14f), new Vector2(540f, 66f), ColPanelDark);
+            _topCenterPill = pill;
 
             // Left Protected Box
             RectTransform protBox = CreatePanel("ProtectedBox", pill, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(10f, 0f), new Vector2(128f, 50f), ColPanelInner);
@@ -212,6 +242,7 @@ namespace MeWorld.UI
         private void BuildTopRightRankPill(RectTransform root)
         {
             RectTransform rankPill = CreatePanel("TopRightRankPill", root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-22f, -18f), new Vector2(150f, 36f), ColPanelDark);
+            _topRightRankPill = rankPill;
             _topRightRankText = CreateTMP("RankTxt", rankPill, "#210 • 0.18%", 13f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
             StretchFull(_topRightRankText.rectTransform);
         }
@@ -219,6 +250,7 @@ namespace MeWorld.UI
         private void BuildBottomControlBar(RectTransform root)
         {
             RectTransform bar = CreatePanel("BottomDockBar", root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 16f), new Vector2(1520f, 84f), ColPanelDark);
+            _bottomDockBar = bar;
 
             // 1. Pause Button & Player Identity (x: 12 .. 225)
             RectTransform pauseBtnRt = CreatePanel("PauseBtn", bar, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14f, 0f), new Vector2(40f, 44f), ColPanelInner);
@@ -238,8 +270,8 @@ namespace MeWorld.UI
             crownImg.sprite = ProceduralSpriteFactory.GetCrownSprite();
             crownImg.color = ColGoldBright;
 
-            TextMeshProUGUI pName = CreateTMP("PlayerName", playerInfoRt, "SnickTrix", 16, FontStyles.Bold, Color.white, TextAlignmentOptions.Left);
-            SetRect(pName.rectTransform, new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(0, 0.5f), new Vector2(22f, 11f), new Vector2(-22f, 22f));
+            _playerNameText = CreateTMP("PlayerName", playerInfoRt, "SnickTrix", 16, FontStyles.Bold, Color.white, TextAlignmentOptions.Left);
+            SetRect(_playerNameText.rectTransform, new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(0, 0.5f), new Vector2(22f, 11f), new Vector2(-22f, 22f));
 
             _playerWorldSubText = CreateTMP("PlayerWorldSub", playerInfoRt, "0.18% of the world", 12, FontStyles.Normal, ColTextMuted, TextAlignmentOptions.Left);
             SetRect(_playerWorldSubText.rectTransform, new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(0, 0.5f), new Vector2(2f, -11f), new Vector2(-4f, 18f));
@@ -343,6 +375,12 @@ namespace MeWorld.UI
                 SetRect(costTxt.rectTransform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, 4f), new Vector2(0, 16f));
                 costTxt.raycastTarget = false;
 
+                KeyAction? ka = KeybindManager.Instance.GetKeyActionForStructure(st);
+                string keyBadge = ka.HasValue ? $"[{KeybindManager.Instance.GetKeyDisplayName(ka.Value)}]" : "";
+                TextMeshProUGUI hotkeyTxt = CreateTMP("HotkeyBadge", actRt, keyBadge, 9f, FontStyles.Bold, ColCyanBright, TextAlignmentOptions.Right);
+                SetRect(hotkeyTxt.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-4f, -3f), new Vector2(-4f, 12f));
+                hotkeyTxt.raycastTarget = false;
+
                 Button actBtn = actRt.gameObject.AddComponent<Button>();
                 actBtn.targetGraphic = bgImg;
                 actBtn.onClick.AddListener(() => ToggleSelectAction(st));
@@ -352,7 +390,8 @@ namespace MeWorld.UI
                     Type = st,
                     BgImage = bgImg,
                     BorderImage = borderImg,
-                    CostText = costTxt
+                    CostText = costTxt,
+                    HotkeyBadge = hotkeyTxt
                 });
             }
         }
@@ -408,7 +447,154 @@ namespace MeWorld.UI
             RefreshHUD();
         }
 
-        private void ToggleSelectAction(StructureType type)
+        private void BuildPauseMenuOverlay(RectTransform root)
+        {
+            _pauseMenuModal = new GameObject("PauseMenuModal", typeof(RectTransform), typeof(Image));
+            RectTransform rt = _pauseMenuModal.GetComponent<RectTransform>();
+            rt.SetParent(root, false);
+            StretchFull(rt);
+            _pauseMenuModal.GetComponent<Image>().color = new Color(0, 0, 0, 0.72f);
+
+            RectTransform box = CreatePanel("PauseBox", rt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(460f, 380f), ColPanelDark);
+
+            TextMeshProUGUI title = CreateTMP("PauseTitle", box, "OYUN DURAKLATILDI", 24, FontStyles.Bold, ColGoldBright, TextAlignmentOptions.Center);
+            SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(0, -28), new Vector2(-30, 36));
+
+            float startY = -80f;
+            float btnH = 46f;
+            float spacing = 12f;
+
+            CreatePauseBtn(box, "OYUNA DEVAM ET (RESUME)", new Vector2(0, startY), ColGreenBright, () => ClosePauseMenu());
+
+            startY -= (btnH + spacing);
+            CreatePauseBtn(box, "AYARLAR (KISAYOLLAR & SES)", new Vector2(0, startY), ColOrangeAccent, () =>
+            {
+                ClosePauseMenu();
+                OnOpenSettingsRequested?.Invoke();
+            });
+
+            startY -= (btnH + spacing);
+            CreatePauseBtn(box, "YENİDEN BAŞLAT", new Vector2(0, startY), ColCyanBright, () =>
+            {
+                ClosePauseMenu();
+                OnRestartRequested?.Invoke();
+            });
+
+            startY -= (btnH + spacing);
+            CreatePauseBtn(box, "ANA MENÜYE DÖN", new Vector2(0, startY), new Color32(239, 68, 68, 255), () =>
+            {
+                ClosePauseMenu();
+                OnReturnToMainMenuRequested?.Invoke();
+            });
+
+            _pauseMenuModal.SetActive(false);
+        }
+
+        private void CreatePauseBtn(RectTransform parent, string label, Vector2 pos, Color col, Action onClick)
+        {
+            RectTransform btnRt = CreatePanel("Btn_" + label, parent, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), pos, new Vector2(380f, 46f), ColPanelInner);
+            Button btn = btnRt.gameObject.AddComponent<Button>();
+            btn.onClick.AddListener(() => onClick?.Invoke());
+
+            TextMeshProUGUI txt = CreateTMP("Lbl", btnRt, label, 14, FontStyles.Bold, col, TextAlignmentOptions.Center);
+            SetRect(txt.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        }
+
+        private void BuildSpawnSelectionBanner(RectTransform root)
+        {
+            RectTransform banner = CreatePanel("SpawnSelectionBanner", root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -18f), new Vector2(760f, 76f), ColPanelDark);
+            _spawnBannerObj = banner.gameObject;
+
+            RectTransform iconRt = CreateRect("FlagIcon", banner, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(24f, 0), new Vector2(36f, 36f));
+            TextMeshProUGUI flag = CreateTMP("Flag", iconRt, "[*]", 20, FontStyles.Bold, ColGoldBright, TextAlignmentOptions.Center);
+            StretchFull(flag.rectTransform);
+
+            TextMeshProUGUI title = CreateTMP("SpawnTitle", banner, "BAŞLANGIÇ BÖLGENİZİ SEÇİN", 16, FontStyles.Bold, ColGoldBright, TextAlignmentOptions.Left);
+            SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(0.72f, 1), new Vector2(0, 1), new Vector2(68f, -14f), new Vector2(0, 22f));
+
+            TextMeshProUGUI sub = CreateTMP("SpawnSub", banner, "Haritada başlamak istediğiniz karaya tıklayın (WASD / Sürükle)", 12, FontStyles.Normal, ColTextMuted, TextAlignmentOptions.Left);
+            SetRect(sub.rectTransform, new Vector2(0, 0), new Vector2(0.72f, 0), new Vector2(0, 0), new Vector2(68f, 14f), new Vector2(0, 20f));
+
+            _spawnTimerText = CreateTMP("SpawnTimer", banner, "10.0s", 22, FontStyles.Bold, ColCyanBright, TextAlignmentOptions.Right);
+            SetRect(_spawnTimerText.rectTransform, new Vector2(0.68f, 0.5f), new Vector2(0.80f, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(0, 32f));
+
+            RectTransform rndBtnRt = CreatePanel("RndSpawnBtn", banner, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-16f, 0), new Vector2(136f, 44f), ColOrangeAccent);
+            Button rndBtn = rndBtnRt.gameObject.AddComponent<Button>();
+            rndBtn.onClick.AddListener(() => OnSpawnRandomRequested?.Invoke());
+            TextMeshProUGUI rndLbl = CreateTMP("RndLbl", rndBtnRt, "RASTGELE SEÇ", 12, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
+            StretchFull(rndLbl.rectTransform);
+
+            _spawnBannerObj.SetActive(false);
+        }
+
+        public void ShowSpawnSelectionBanner()
+        {
+            if (_spawnBannerObj != null) _spawnBannerObj.SetActive(true);
+            if (_topCenterPill != null) _topCenterPill.gameObject.SetActive(false);
+            if (_bottomDockBar != null) _bottomDockBar.gameObject.SetActive(false);
+            if (_topRightRankPill != null) _topRightRankPill.gameObject.SetActive(false);
+        }
+
+        public void UpdateSpawnSelectionTimer(float seconds)
+        {
+            if (_spawnTimerText != null)
+            {
+                _spawnTimerText.text = $"{Mathf.Max(0f, seconds):0.0}s";
+                _spawnTimerText.color = seconds < 3.5f ? new Color32(239, 68, 68, 255) : ColCyanBright;
+            }
+        }
+
+        public void HideSpawnSelectionBanner()
+        {
+            if (_spawnBannerObj != null) _spawnBannerObj.SetActive(false);
+            if (_topCenterPill != null) _topCenterPill.gameObject.SetActive(true);
+            if (_bottomDockBar != null) _bottomDockBar.gameObject.SetActive(true);
+            if (_topRightRankPill != null) _topRightRankPill.gameObject.SetActive(true);
+        }
+
+        public void OpenPauseMenu()
+        {
+            SetPaused(true);
+            if (_pauseMenuModal != null) _pauseMenuModal.SetActive(true);
+        }
+
+        public void ClosePauseMenu()
+        {
+            if (_pauseMenuModal != null) _pauseMenuModal.SetActive(false);
+            SetPaused(false);
+        }
+
+        public void TogglePause()
+        {
+            SetPaused(!IsPaused);
+        }
+
+        public void SetPaused(bool paused)
+        {
+            IsPaused = paused;
+            if (_pauseBtnText != null) _pauseBtnText.text = IsPaused ? ">" : "||";
+            ShowStatusMessage(IsPaused ? "Oyun Duraklatıldı" : "Oyun Devam Ediyor", 1.5f);
+        }
+
+        public void RefreshKeybindBadges()
+        {
+            for (int i = 0; i < _actionButtons.Count; i++)
+            {
+                ActionBtnUI ab = _actionButtons[i];
+                KeyAction? ka = KeybindManager.Instance.GetKeyActionForStructure(ab.Type);
+                if (ka.HasValue && ab.HotkeyBadge != null)
+                {
+                    ab.HotkeyBadge.text = $"[{KeybindManager.Instance.GetKeyDisplayName(ka.Value)}]";
+                }
+            }
+        }
+
+        public void SelectAttackRatioPreset(int index)
+        {
+            SelectAttackRatioIndex(index);
+        }
+
+        public void ToggleSelectAction(StructureType type)
         {
             if (SelectedAction == type)
             {
@@ -455,10 +641,37 @@ namespace MeWorld.UI
 
         public void RefreshHUD()
         {
-            if (_territoryManager == null || _territoryManager.PlayerNation == null) return;
+            if (_territoryManager == null) return;
 
             NationData player = _territoryManager.PlayerNation;
-            NationData leader = _territoryManager.LeadingNation ?? player;
+            NationData leader = _territoryManager.LeadingNation ?? (_territoryManager.NationList.Count > 0 ? _territoryManager.NationList[0] : null);
+
+            // Protected timer
+            _protectedTimerText.text = GameConfig.FormatTime(_territoryManager.ProtectionTimer);
+
+            if (player == null)
+            {
+                // Spectator Mode
+                float specLeaderPct = leader != null ? leader.WorldControlPercent * 100f : 0f;
+                string specLeaderStr = specLeaderPct.ToString("0.00", CultureInfo.InvariantCulture) + "%";
+
+                _youControlText.text = "<color=#EC4899>[*]</color> Mod: <b>İZLEYİCİ</b>";
+                _leaderControlText.text = leader != null ? $"<color=#3B82F6>[*]</color> #1 {leader.Name}  <b>{specLeaderStr}</b>" : "";
+
+                _topRightRankText.text = "👁 İZLEYİCİ";
+                _playerWorldSubText.text = "88 AI Savaşıyor";
+
+                _troopsGrowthText.text = "";
+                _troopsValueText.text = "İzleme Modu";
+                _troopsBarFill.anchorMax = new Vector2(1f, 1f);
+
+                _goldGrowthText.text = "";
+                _goldValueText.text = "Tıkla & İncele";
+
+                _attackPctHeaderText.text = "-";
+                _attackSendsSubText.text = "Herhangi bir ülkeye tıklayın";
+                return;
+            }
 
             // Protected timer
             _protectedTimerText.text = GameConfig.FormatTime(_territoryManager.ProtectionTimer);
@@ -481,6 +694,7 @@ namespace MeWorld.UI
             // Top Right Rank Pill - matching reference screenshot #210 • 0.18%
             _topRightRankText.text = $"#{_territoryManager.PlayerRank} • {pPctStr}";
 
+            if (_playerNameText != null) _playerNameText.text = player.Name;
             // Bottom Player World Subtext
             _playerWorldSubText.text = $"{pPctStr} of the world";
 
